@@ -305,8 +305,22 @@ bool ProgAlgSpi::Spi_Identify(bool verbose)
       } 
       else
       {
-        printf("Unknown Winbond Flash Type (0x%.2x)\n", tdo[2]);
-        return false;
+        switch(tdo[3]) 
+        {
+          case 0x15: /* W25P16VSIG */
+            Pages=8192;
+            PageSize=256;
+            BulkErase=1;
+            SectorErase=1;
+            FlashType=GENERIC;
+            break;
+          default:
+            printf("Unknown Winbond W25P Flash Size (0x%.2x)\n", tdo[3]);
+            return false;
+        }
+        if(verbose)
+          printf("Found Winbond Flash W25P16VSIG (Pages=%d, Page Size=%d bytes, %d bits).\n",Pages,PageSize,Pages*PageSize*8);
+        break;
       }
       break;
     case 0xbf: /* SST */
@@ -398,6 +412,7 @@ bool ProgAlgSpi::Spi_Write_Check(bool verbose)
   }
 
   Spi_Command(StatusReg_Cmd, tdo, 16);
+  printf("[0x%02X], [0x%02X], [0x%02X], [0x%02X] \n", tdo[0], tdo[1], tdo[2], tdo[3]);
   if((tdo[1]&StatusReg_Mask) != StatusReg_Val)
   {
     if(verbose)
@@ -489,6 +504,7 @@ bool ProgAlgSpi::Spi_Erase(bool verbose)
   }
   else if (FlashType==GENERIC)
   {
+    printf("Write Enable...\n");
     Spi_Command((byte*)"\x06",0,7);  //Write Enable
     for(x=0;x<=Max_Retries;x++)
     {
@@ -497,6 +513,7 @@ bool ProgAlgSpi::Spi_Erase(bool verbose)
         break;
       Sleep(tCE);
     }
+    printf("WE Ok\n");
 
     Spi_Command((byte*)"\xc7",0,7);  //Bulk Erase
     for(x=0;x<=BulkErase;x++)
@@ -635,6 +652,7 @@ bool ProgAlgSpi::Spi_PartialErase(int length, bool verbose)
   }
   else if (FlashType==GENERIC)
   {
+    printf("GENERIC PARTIAL ERASE START...\n");
     // use partial erase
     unsigned int wBytes=(length+7)/8;
     unsigned int DoPages=(wBytes+PageSize-1)/PageSize;    
@@ -650,6 +668,9 @@ bool ProgAlgSpi::Spi_PartialErase(int length, bool verbose)
             break;
           Sleep(tCE);
         }
+
+        printf("WE OK\n");
+
         Spi_SetCommandRW('\xd8',data,i*PageSize);  //Sector Erase
         Spi_Command(data,0,31);
         Sleep(tCE);    
